@@ -1,0 +1,6 @@
+; $Id$
+name = Node Reference URL Widget
+description = Adds an additional widget to the CCK Node Reference field that prepopulates a reference by the URL.
+dependencies[] = nodereference
+package = CCK
+core = 6.x
