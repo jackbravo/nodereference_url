@@ -53,14 +53,17 @@ function nodereference_url_link($type, $object, $teaser = FALSE) {
   if ($type == 'node') {
     $fields = content_fields(NULL, $object->type);
     foreach ($fields as $field_name => $field) {
-      if ($field['widget']['type'] == 'nodereference_url' && !empty($field['widget']['node_link']['enabled'])) {
-        if ($field['referenceable_types'][$object->type]) {
-          $links[$field_name] = array(
-            'title' => $field['widget']['node_link']['title'],
-            'href' => 'node/add/'. str_replace('_', '-', $field['type_name']) .'/'. $object->nid,
-          );
-          if (!empty($field['widget']['node_link']['hover_title'])) {
-            $links[$field_name]['attributes']['title'] = $field['widget']['node_link']['hover_title'];
+      foreach(_nodereference_url_field_instances($field_name) as $target_type => $instance) {
+        if ($instance['widget']['type'] == 'nodereference_url' && !empty($instance['widget']['node_link']['enabled'])) {
+          if ($field['referenceable_types'][$object->type]) {
+            
+            $links[$target_type .'_'. $field_name] = array(
+              'title' => $instance['widget']['node_link']['title'],
+              'href' => 'node/add/'. str_replace('_', '-', $instance['type_name']) .'/'. $object->nid,
+            );
+            if (!empty($instance['widget']['node_link']['hover_title'])) {
+              $links[$target_type .'_'. $field_name]['attributes']['title'] = $instance['widget']['node_link']['hover_title'];
+            }
           }
         }
       }
@@ -68,6 +71,20 @@ function nodereference_url_link($type, $object, $teaser = FALSE) {
   }
 
   return $links;
+}
+
+/**
+ * Helper function to retrieve all instances of a field.
+ */
+function _nodereference_url_field_instances($field_name) {
+  $info = _content_type_info();
+  $instances = array();
+  foreach(node_get_types('names') as $node_type => $node_type_name) {
+    if (isset($info['content types'][$node_type]['fields'][$field_name])) {
+      $instances[$node_type] = $info['content types'][$node_type]['fields'][$field_name];
+    }
+  }
+  return $instances;
 }
 
 /**
