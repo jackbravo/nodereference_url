@@ -195,7 +195,9 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
 
   if (!isset($referenced_nid)) {
     // Page not found error.
-    if ($field['widget']['fallback'] == 'page_not_found') {
+    // Check for the form_build_id to prevent throwing a page not found on
+    // manual builds. See http://drupal.org/node/397606.
+    if ($field['widget']['fallback'] == 'page_not_found' && isset($form['form_build_id'])) {
       drupal_set_message(t('To create a new @type, a referenced piece of content must be specified in the link you followed.', array('@type' => node_get_types('name', $field['type_name']))), 'error');
       drupal_not_found();
       exit();
