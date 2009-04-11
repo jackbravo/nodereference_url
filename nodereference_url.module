@@ -205,6 +205,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
       $element = array(
         '#type' => 'nodereference_select',
         '#default_value' => $items,
+        '#after_build' => array('nodereference_url_process_select'),
       );
     }
     // Fallback to autocomplete.
@@ -257,6 +258,22 @@ function nodereference_url_process($element, $edit, $form_state, $form) {
     '#value' => isset($element['#value']) ? $element['#value'] : $element['#value'],
     '#parents' => $element['#parents'],
   );
+
+  return $element;
+}
+
+/**
+ * An #after_build function used to add an empty value to the list of options.
+ *
+ * Normally CCK would do this in optionwidgets_options(), but since the widget
+ * type "nodereference_url" isn't known by it, we have to add it manually.
+ */
+function nodereference_url_process_select($element, $form_state) {
+  if (isset($element['nid']['nid']['#options'])) {
+    $field = content_fields($element['#field_name'], $element['#type_name']);
+    $field['widget']['type'] = 'optionwidgets_select';
+    $element['nid']['nid']['#options'] = array('' => theme('optionwidgets_none', $field)) + $element['nid']['nid']['#options'];
+  }
 
   return $element;
 }
