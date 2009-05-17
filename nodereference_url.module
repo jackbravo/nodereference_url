@@ -235,7 +235,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
   }
 
   if (isset($referenced_nid)) {
-    $element['nid']['nid'] = array(
+    $element[0]['nid'] = array(
       '#title' => $field['widget']['label'],
       '#type' => 'nodereference_url',
       '#field_name' => $field['field_name'],
@@ -255,7 +255,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
  * The $fields array is in $form['#field_info'][$element['#field_name']].
  */
 function nodereference_url_process($element, $edit, $form_state, $form) {
-  $field_key  = $element['#columns'][0];
+  $field_key = $element['#columns'][0];
   $field = $form['#field_info'][$element['#field_name']];
 
   if (isset($element['#value']) && is_numeric($element['#value'])) {
