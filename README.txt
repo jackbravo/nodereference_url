@@ -15,7 +15,7 @@ Dependencies
 
 Install
 -------
-Installing the Five Star voting module is simple:
+Installing the Node Reference URL Widget is simple:
 
 1) Copy the nodereference_url folder to the sites/all/modules folder in your installation.
 
