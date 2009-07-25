@@ -48,28 +48,79 @@ function nodereference_url_widget_info() {
  * Implementation of hook_link().
  */
 function nodereference_url_link($type, $object, $teaser = FALSE) {
-  $links = array();
-
   if ($type == 'node') {
-    $fields = content_fields(NULL, $object->type);
-    foreach ($fields as $field_name => $field) {
-      foreach(_nodereference_url_field_instances($field_name) as $target_type => $instance) {
-        if ($instance['widget']['type'] == 'nodereference_url' && !empty($instance['widget']['node_link']['enabled'])) {
-          if (!empty($field['referenceable_types'][$object->type]) && user_access('create ' . $target_type . ' content')) {
-            $links[$target_type .'_'. $field_name] = array(
-              'title' => $instance['widget']['node_link']['title'],
-              'href' => 'node/add/'. str_replace('_', '-', $instance['type_name']) .'/'. $object->nid,
-            );
-            if (!empty($instance['widget']['node_link']['hover_title'])) {
-              $links[$target_type .'_'. $field_name]['attributes']['title'] = $instance['widget']['node_link']['hover_title'];
-            }
+    return nodereference_url_build_all_links($object, $teaser);
+  }
+}
+
+/**
+ * Build an array of links for nodereference_url widgets that point to this node.
+ *
+ * @param $node
+ *   A fully loaded node object.
+ * @param $teaser
+ *   
+ * @return
+ *   An array of links for use with theme_links().
+ */
+function nodereference_url_build_all_links($node, $teaser) {
+  $links = array();
+  $fields = content_fields(NULL, $object->type);
+  foreach ($fields as $field_name => $field) {
+    foreach(_nodereference_url_field_instances($field_name) as $target_type => $instance) {
+      if ($instance['widget']['type'] == 'nodereference_url') {
+        $link_settings = $instance['widget']['node_link'];
+        if (($link_settings['teaser'] && $teaser == TRUE) || ($link_settings['full'] && $teaser == FALSE)) {
+          if ($link = nodereference_url_build_link($node, $instance, $teaser)) {
+            $links[$target_type .'_'. $field_name] = $link;
           }
         }
       }
     }
   }
-
   return $links;
+}
+
+/**
+ * Build an individual link.
+ *
+ * Checks to ensure that the current node can be referenced by the field, ensures
+ * the current user has permission to create the field's node type, and builds
+ * the link based on the field's settings.
+ *
+ * @param $node
+ *   A fully loaded node object.
+ * @param $field
+ *   A CCK field instance.
+ *
+ * @return
+ *   An array containing properties to build a single link.
+ */
+function nodereference_url_build_link($node, $field, $teaser) {
+  $link = array();
+
+  if (!empty($field['referenceable_types'][$node->type]) && user_access('create ' . $field['type_name'] . ' content')) {
+    $link_settings = $field['widget']['node_link'];
+    if ((!empty($link_settings['teaser']) && $teaser == TRUE) || (!empty($link_settings['full']) && $teaser == FALSE)) {
+      $link = array(
+        'title' => $link_settings['title'],
+        'href' => 'node/add/'. str_replace('_', '-', $field['type_name']) .'/'. $node->nid,
+      );
+      if (!empty($link_settings['hover_title'])) {
+        $link['attributes']['title'] = $link_settings['hover_title'];
+      }
+      if (!empty($link_settings['destination'])) {
+        if ($link_settings['destination'] == 'source') {
+          $link['query'] = drupal_get_destination();
+        }
+        elseif ($link_settings['destination'] == 'node') {
+          $link['query'] = 'destination='. urlencode(drupal_get_path_alias('node/'. $node->nid));
+        }
+      }
+    }
+  }
+
+  return $link;
 }
 
 /**
@@ -132,15 +183,23 @@ function nodereference_url_widget_settings($op, $widget) {
           '#required' => TRUE,
           '#element_validate' => array('nodereference_url_fallback_validate'),
         );
+
         $form['node_link'] = array(
           '#tree' => TRUE,
-          '#weight' => 2,
+          '#type' => 'fieldset',
+          '#title' => t('Referenceable node links'),
           '#element_validate' => array('nodereference_url_node_link_validate'),
+          '#description' => t('These settings will automatically make a link on nodes that can be referenced. Clicking the link will take the user to the new node form and prepopulate the value of this node reference field.'),
         );
-        $form['node_link']['enabled'] = array(
+        $form['node_link']['teaser'] = array(
           '#type' => 'checkbox',
-          '#title' => t('Create a link on referenceable content'),
-          '#default_value' => isset($widget['node_link']['enabled']) ? $widget['node_link']['enabled'] : '1',
+          '#title' => t('Create link on the teaser view'),
+          '#default_value' => isset($widget['node_link']['teaser']) ? $widget['node_link']['teaser'] : FALSE,
+        );
+        $form['node_link']['full'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Create link on the full view'),
+          '#default_value' => isset($widget['node_link']['full']) ? $widget['node_link']['full'] : TRUE,
         );
         $form['node_link']['title'] = array(
           '#type' => 'textfield',
@@ -153,6 +212,17 @@ function nodereference_url_widget_settings($op, $widget) {
           '#title' => t('Link hover title'),
           '#default_value' => isset($widget['node_link']['hover_title']) ? $widget['node_link']['hover_title'] : '',
           '#description' => t('Text shown while hovering over the link.'),
+        );
+        $form['node_link']['destination'] = array(
+          '#type' => 'select',
+          '#title' => t('Return path'),
+          '#default_value' => isset($widget['node_link']['destination']) ? $widget['node_link']['destination'] : 'default',
+          '#options' => array(
+            'default' => t('The new node (no redirect)'),
+            'node' => t('The referenced node'),
+            'source' => t('The previous page'),
+          ),
+          '#description' => t('After creating the new node through the link, determine where the user should be redirected.'),
         );
       }
       return $form;
@@ -175,7 +245,8 @@ function nodereference_url_fallback_validate($element, &$form_state) {
  * Element validation function that makes title required when creating a link.
  */
 function nodereference_url_node_link_validate($element, &$form_state) {
-  if ($form_state['values']['node_link']['enabled'] && empty($form_state['values']['node_link']['title'])) {
+  $link_settings = $form_state['values']['node_link'];
+  if (($link_settings['teaser'] || $link_settings['full']) && empty($link_settings['title'])) {
     form_error($element['title'], t('A link title must be specified if creating links on referenceable content.'));
   }
 }
