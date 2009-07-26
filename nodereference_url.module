@@ -67,7 +67,7 @@ function nodereference_url_build_all_links($node, $teaser) {
   $links = array();
   $fields = content_fields(NULL, $object->type);
   foreach ($fields as $field_name => $field) {
-    foreach(_nodereference_url_field_instances($field_name) as $target_type => $instance) {
+    foreach (_nodereference_url_field_instances($field_name) as $target_type => $instance) {
       if ($instance['widget']['type'] == 'nodereference_url') {
         $link_settings = $instance['widget']['node_link'];
         if (($link_settings['teaser'] && $teaser == TRUE) || ($link_settings['full'] && $teaser == FALSE)) {
@@ -99,7 +99,16 @@ function nodereference_url_build_all_links($node, $teaser) {
 function nodereference_url_build_link($node, $field, $teaser) {
   $link = array();
 
-  if (!empty($field['referenceable_types'][$node->type]) && user_access('create ' . $field['type_name'] . ' content')) {
+  // Check if this widget is using a views listing.
+  if (module_exists('views') && !empty($field['advanced_view']) && $field['advanced_view'] != '--') {
+    $referenceable = (bool) _nodereference_potential_references_views($field, '', NULL, array($node->nid), 1);
+  }
+  // Otherwise restrict by node type.
+  else {
+    $referenceable = !empty($field['referenceable_types'][$node->type]);
+  }
+
+  if ($referenceable && user_access('create ' . $field['type_name'] . ' content')) {
     $link_settings = $field['widget']['node_link'];
     if ((!empty($link_settings['teaser']) && $teaser == TRUE) || (!empty($link_settings['full']) && $teaser == FALSE)) {
       $link = array(
