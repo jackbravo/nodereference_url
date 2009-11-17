@@ -65,7 +65,7 @@ function nodereference_url_link($type, $object, $teaser = FALSE) {
  */
 function nodereference_url_build_all_links($node, $teaser) {
   $links = array();
-  $fields = content_fields(NULL, $object->type);
+  $fields = content_fields(NULL, $node->type);
   foreach ($fields as $field_name => $field) {
     foreach (_nodereference_url_field_instances($field_name) as $target_type => $instance) {
       if ($instance['widget']['type'] == 'nodereference_url') {
