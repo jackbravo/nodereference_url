@@ -112,11 +112,11 @@ function nodereference_url_build_link($node, $field, $teaser) {
     $link_settings = $field['widget']['node_link'];
     if ((!empty($link_settings['teaser']) && $teaser == TRUE) || (!empty($link_settings['full']) && $teaser == FALSE)) {
       $link = array(
-        'title' => $link_settings['title'],
+        'title' => t($link_settings['title']),
         'href' => 'node/add/'. str_replace('_', '-', $field['type_name']) .'/'. $node->nid,
       );
       if (!empty($link_settings['hover_title'])) {
-        $link['attributes']['title'] = $link_settings['hover_title'];
+        $link['attributes']['title'] = t($link_settings['hover_title']);
       }
       if (!empty($link_settings['destination'])) {
         if ($link_settings['destination'] == 'source') {
