@@ -92,11 +92,13 @@ function nodereference_url_build_all_links($node, $teaser) {
  *   A fully loaded node object.
  * @param $field
  *   A CCK field instance.
+ * @param $teaser
+ *   Optional. The current display mode of the node. Defaults to FALSE.
  *
  * @return
  *   An array containing properties to build a single link.
  */
-function nodereference_url_build_link($node, $field, $teaser) {
+function nodereference_url_build_link($node, $field, $teaser = FALSE) {
   $link = array();
 
   // Check if this widget is using a views listing.
@@ -133,12 +135,44 @@ function nodereference_url_build_link($node, $field, $teaser) {
 }
 
 /**
+ * Helper function for themers to easily create a link.
+ *
+ * This function should be used in custom themes, rather than making manual
+ * links because it first checks a user's access before showing the link. If
+ * the user does not have access to create the node then an empty string will
+ * be returned.
+ *
+ * @param $node
+ *   The node object that will be referenced.
+ * @param $field_name
+ *   The name of the Node Reference field.
+ * @param $type_name
+ *   The name of node type that contains the Node Reference field.
+ * @param $attributes
+ *   Optional. An array of additional attributes to add to the link.
+ */
+function nodereference_url_create_link($node, $field_name, $type_name, $attributes = array()) {
+  $output = '';
+  $field = content_fields($field_name, $type_name);
+  $field['widget']['node_link']['full'] = TRUE;
+  if ($link = nodereference_url_build_link($node, $field)) {
+    $options = array();
+    $options['attributes'] = $attributes + (array) $link['attributes'];
+    if ($link['query']) {
+      $options['query'] = $link['query'];
+    }
+    $output = l($link['title'], $link['href'], $options);
+  }
+  return $output;
+}
+
+/**
  * Helper function to retrieve all instances of a field.
  */
 function _nodereference_url_field_instances($field_name) {
   $info = _content_type_info();
   $instances = array();
-  foreach(node_get_types('names') as $node_type => $node_type_name) {
+  foreach (node_get_types('names') as $node_type => $node_type_name) {
     if (isset($info['content types'][$node_type]['fields'][$field_name])) {
       $instances[$node_type] = $info['content types'][$node_type]['fields'][$field_name];
     }
