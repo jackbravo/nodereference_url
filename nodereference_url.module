@@ -183,8 +183,7 @@ function nodereference_url_widget_settings($op, $widget) {
           '#options' => array(
             'page_not_found' => t('Display page not found error'),
             'select' => t('Use select list widget'),
-            // TODO: Get autocomplete fallback working. Currently looses value on save.
-            //'autocomplete' => t('Use autocomplete widget'),
+            'autocomplete' => t('Use autocomplete widget'),
             'leave_blank' => t('Leave the field blank'),
           ),
           '#default_value' => isset($widget['fallback']) ? $widget['fallback'] : 'page_not_found',
@@ -251,6 +250,16 @@ function nodereference_url_fallback_validate($element, &$form_state) {
 }
 
 /**
+ * FAPI #element_validate callback for the nodereference_autocomplete widget.
+ *
+ * This function doesn't actually validate, it just reformats form_state value
+ * into an array of a suitable format for nodereference module
+ */
+function nodereference_url_autocomplete_validate($element, &$form_state) {
+  form_set_value($element, array($form_state['values'][$element['#field_name']]), $form_state);
+}
+
+/**
  * Element validation function that makes title required when creating a link.
  */
 function nodereference_url_node_link_validate($element, &$form_state) {
@@ -306,6 +315,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
         '#type' => 'nodereference_autocomplete',
         '#default_value' => isset($items[$delta]) ? $items[$delta] : NULL,
         '#value_callback' => 'nodereference_autocomplete_value',
+        '#element_validate' => array('nodereference_url_autocomplete_validate'),
       );
     }
     // Fallback to an empty field.
