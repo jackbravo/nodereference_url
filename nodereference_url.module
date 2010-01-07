@@ -128,6 +128,10 @@ function nodereference_url_build_link($node, $field, $teaser = FALSE) {
           $link['query'] = 'destination='. urlencode(drupal_get_path_alias('node/'. $node->nid));
         }
       }
+      if (module_exists('og') && $group_node = og_determine_context_get_group($node)) {
+        $link['query'] = isset($link['query']) ? $link['query'] . '&' : '';
+        $link['query'] .= 'gids[]=' . $group_node->nid;
+      }
     }
   }
 
