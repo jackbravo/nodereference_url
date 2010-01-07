@@ -65,7 +65,7 @@ function nodereference_url_link($type, $object, $teaser = FALSE) {
  */
 function nodereference_url_build_all_links($node, $teaser) {
   $links = array();
-  $fields = content_fields(NULL, $node->type);
+  $fields = content_fields();
   foreach ($fields as $field_name => $field) {
     foreach (_nodereference_url_field_instances($field_name) as $target_type => $instance) {
       if ($instance['widget']['type'] == 'nodereference_url') {
@@ -110,7 +110,7 @@ function nodereference_url_build_link($node, $field, $teaser = FALSE) {
     $referenceable = !empty($field['referenceable_types'][$node->type]);
   }
 
-  if ($referenceable && user_access('create ' . $field['type_name'] . ' content')) {
+  if ($referenceable && node_access('create', $field['type_name'])) {
     $link_settings = $field['widget']['node_link'];
     if ((!empty($link_settings['teaser']) && $teaser == TRUE) || (!empty($link_settings['full']) && $teaser == FALSE)) {
       $link = array(
