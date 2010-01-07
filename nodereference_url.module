@@ -336,6 +336,12 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
 
   // If no NID is available, use the fallback behavior.
   if (!isset($referenced_nid)) {
+    // If not on a node/add page (such as editing a node that does not yet have
+    // a reference), switch to using an autocomplete widget.
+    if ($field['widget']['fallback'] == 'page_not_found' && arg(0) == 'node' && is_numeric(arg(1))) {
+      $field['widget']['fallback'] = 'autocomplete';
+    }
+
     // Page not found error.
     // Check for the form_build_id to prevent throwing a page not found on
     // manual builds. See http://drupal.org/node/397606.
