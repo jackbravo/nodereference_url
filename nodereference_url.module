@@ -274,10 +274,15 @@ function nodereference_url_node_link_validate($element, &$form_state) {
  */
 function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta = 0) {
   $element = array('#tree' => TRUE);
+  $field_name = $field['field_name'];
+  $field_name_url = preg_replace('/^field_/', '', $field_name);
 
   // Check for an existing NID or pull it from the URL.
   if (isset($items[0]['nid']) && is_numeric($items[0]['nid'])) {
     $referenced_nid = $items[0]['nid'];
+  }
+  elseif (arg(0) == 'node' && arg(1) == 'add' && isset($_GET[$field_name_url])) {
+    $referenced_nid = is_numeric($_GET[$field_name_url]) ? $_GET[$field_name_url] : NULL;
   }
   elseif (arg(0) == 'node' && arg(1) == 'add') {
     $referenced_nid = is_numeric(arg(3)) ? arg(3) : NULL;
@@ -328,7 +333,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
     $element[0]['nid'] = array(
       '#title' => $field['widget']['label'],
       '#type' => 'nodereference_url',
-      '#field_name' => $field['field_name'],
+      '#field_name' => $field_name,
       '#default_value' => $referenced_nid,
     );
   }
