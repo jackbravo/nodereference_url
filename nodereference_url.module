@@ -237,6 +237,12 @@ function nodereference_url_widget_settings($op, $widget) {
           '#description' => t('If no content is referenced in the URL, determine how the form should be handled.'),
           '#required' => TRUE,
           '#element_validate' => array('nodereference_url_fallback_validate'),
+          '#weight' => -3,
+        );
+        $form['edit_fallback'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Use fallback behavior when editing content'),
+          '#default_value' => isset($widget['edit_fallback']) ? $widget['edit_fallback'] : FALSE,
           '#weight' => -2,
         );
 
@@ -284,7 +290,7 @@ function nodereference_url_widget_settings($op, $widget) {
       return $form;
 
     case 'save':
-      return array('node_link', 'fallback');
+      return array('node_link', 'fallback', 'edit_fallback');
   }
 }
 
@@ -336,45 +342,22 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
   }
   // Pull from the URL.
   else {
-    $add_urls = variable_get('nodereference_url_paths', array('node/add/%type/%nid'));
-    foreach ($add_urls as $url) {
-      $args = explode('/', $url);
-      foreach ($args as $part => $arg) {
-        // Set the target NID if matching on this part of the URL.
-        if ($arg == '%nid') {
-          $referenced_nid = arg($part);
-        }
-        // Set the target NID based on the field name, allowing for multiple
-        // references in the same URL.
-        elseif ($arg == '%' . $field_name_url) {
-          $referenced_nid = arg($part);
-        }
-        // Skip any other wildcards in the URL.
-        elseif (strpos($arg, '%') === 0) {
-          continue;
-        }
-        // Arguments must line up exactly if they're not a wildcard.
-        elseif (arg($part) != $arg) {
-          $reference_nid = NULL;
-          break;
-        }
-      }
-    }
+    $reference_nid = nodereference_url_get_nid($field_name);
   }
 
   // Check that the NID is a valid reference.
-  if (isset($referenced_nid)) {
+  if (!empty($referenced_nid)) {
     $valid_options = optionwidgets_options($field);
     if (!isset($valid_options[$referenced_nid])) {
-      unset($referenced_nid);
+      $referenced_nid = NULL;
     }
   }
 
-  // If no NID is available, use the fallback behavior.
-  if (!isset($referenced_nid)) {
+  // If no NID is available or editing this field, use the fallback behavior.
+  if (empty($referenced_nid) || (!empty($field['widget']['edit_fallback']) && !empty($items))) {
     // If not on a node/add page (such as editing a node that does not yet have
     // a reference), switch to using an autocomplete widget.
-    if ($field['widget']['fallback'] == 'page_not_found' && arg(0) == 'node' && is_numeric(arg(1))) {
+    if ($field['widget']['fallback'] == 'page_not_found' && nodereference_url_get_nid($field_name) === FALSE) {
       $field['widget']['fallback'] = 'autocomplete';
     }
 
@@ -409,7 +392,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
     }
   }
 
-  if (isset($referenced_nid)) {
+  if (isset($referenced_nid) && (empty($field['widget']['edit_fallback']))) {
     $element[0]['nid'] = array(
       '#title' => $field['widget']['label'],
       '#type' => 'nodereference_url',
@@ -463,6 +446,41 @@ function nodereference_url_process_select($element, $form_state) {
   }
 
   return $element;
+}
+
+/**
+ * Check the current URL and pull the referenced node from it.
+ */
+function nodereference_url_get_nid($field_name) {
+  $add_urls = variable_get('nodereference_url_paths', array('node/add/%type/%nid'));
+  $field_name_url = preg_replace('/^field_/', '', $field_name);
+  $reference_nid = NULL;
+
+  foreach ($add_urls as $url) {
+    $args = explode('/', $url);
+    foreach ($args as $part => $arg) {
+      // Set the target NID if matching on this part of the URL.
+      if ($arg == '%nid') {
+        $referenced_nid = arg($part);
+      }
+      // Set the target NID based on the field name, allowing for multiple
+      // references in the same URL.
+      elseif ($arg == '%' . $field_name_url) {
+        $referenced_nid = arg($part);
+      }
+      // Skip any other wildcards in the URL.
+      elseif (strpos($arg, '%') === 0) {
+        continue;
+      }
+      // Arguments must line up exactly if they're not a wildcard.
+      elseif (arg($part) != $arg) {
+        $reference_nid = FALSE;
+        break;
+      }
+    }
+  }
+
+  return $reference_nid;
 }
 
 /**
