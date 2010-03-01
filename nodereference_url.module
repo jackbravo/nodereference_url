@@ -114,9 +114,17 @@ function nodereference_url_build_link($node, $field, $teaser = FALSE) {
   if ($referenceable && node_access('create', $field['type_name'])) {
     $link_settings = $field['widget']['node_link'];
     if ((!empty($link_settings['teaser']) && $teaser == TRUE) || (!empty($link_settings['full']) && $teaser == FALSE)) {
+      // Get the first "preferred" path for creating Node Reference links.
+      $link_urls = variable_get('nodereference_url_paths', array('node/add/%type/%nid'));
+
+      // Basic wildcard replacement: %type and %nid.
+      $link_url = $link_urls[0];
+      $link_url = str_replace('%type', str_replace('_', '-', $field['type_name']), $link_url);
+      $link_url = str_replace('%nid', $node->nid, $link_url);
+
       $link = array(
         'title' => t($link_settings['title']),
-        'href' => 'node/add/'. str_replace('_', '-', $field['type_name']) .'/'. $node->nid,
+        'href' => $link_url,
       );
       if (!empty($link_settings['hover_title'])) {
         $link['attributes']['title'] = t($link_settings['hover_title']);
@@ -316,16 +324,42 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
   $element = array('#tree' => TRUE);
   $field_name = $field['field_name'];
   $field_name_url = preg_replace('/^field_/', '', $field_name);
+  $referenced_nid = NULL;
 
-  // Check for an existing NID or pull it from the URL.
+  // Check for an existing NID.
   if (isset($items[0]['nid']) && is_numeric($items[0]['nid'])) {
     $referenced_nid = $items[0]['nid'];
   }
-  elseif (arg(0) == 'node' && arg(1) == 'add' && isset($_GET[$field_name_url])) {
-    $referenced_nid = is_numeric($_GET[$field_name_url]) ? $_GET[$field_name_url] : NULL;
+  // Check for a reference in the query string.
+  elseif (isset($_GET[$field_name_url]) && is_numeric($_GET[$field_name_url])) {
+    $referenced_nid = $_GET[$field_name_url];
   }
-  elseif (arg(0) == 'node' && arg(1) == 'add') {
-    $referenced_nid = is_numeric(arg(3)) ? arg(3) : NULL;
+  // Pull from the URL.
+  else {
+    $add_urls = variable_get('nodereference_url_paths', array('node/add/%type/%nid'));
+    foreach ($add_urls as $url) {
+      $args = explode('/', $url);
+      foreach ($args as $part => $arg) {
+        // Set the target NID if matching on this part of the URL.
+        if ($arg == '%nid') {
+          $referenced_nid = arg($part);
+        }
+        // Set the target NID based on the field name, allowing for multiple
+        // references in the same URL.
+        elseif ($arg == '%' . $field_name_url) {
+          $referenced_nid = arg($part);
+        }
+        // Skip any other wildcards in the URL.
+        elseif (strpos($arg, '%') === 0) {
+          continue;
+        }
+        // Arguments must line up exactly if they're not a wildcard.
+        elseif (arg($part) != $arg) {
+          $reference_nid = NULL;
+          break;
+        }
+      }
+    }
   }
 
   // Check that the NID is a valid reference.
