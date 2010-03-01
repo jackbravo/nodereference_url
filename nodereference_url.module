@@ -24,7 +24,8 @@ function nodereference_url_form_alter(&$form, &$form_state, $form_id) {
   if ($form_id == 'content_field_edit_form' && isset($form['#field']) && $form['#field']['widget']['type'] == 'nodereference_url') {
     // Hide settings that don't apply to this widget.
     $form['field']['multiple']['#type'] = 'value';
-    $form['widget']['description']['#type'] = 'value';
+    $form['widget']['description']['#title'] = t('Fallback widget help text');
+    $form['widget']['description']['#weight'] = -1;
   }
 }
 
@@ -219,15 +220,16 @@ function nodereference_url_widget_settings($op, $widget) {
           '#type' => 'radios',
           '#title' => t('Fallback behavior'),
           '#options' => array(
-            'page_not_found' => t('Display page not found error'),
-            'select' => t('Use select list widget'),
             'autocomplete' => t('Use autocomplete widget'),
+            'select' => t('Use select list widget'),
+            'page_not_found' => t('Display page not found error'),
             'leave_blank' => t('Leave the field blank'),
           ),
-          '#default_value' => isset($widget['fallback']) ? $widget['fallback'] : 'page_not_found',
+          '#default_value' => isset($widget['fallback']) ? $widget['fallback'] : 'autocomplete',
           '#description' => t('If no content is referenced in the URL, determine how the form should be handled.'),
           '#required' => TRUE,
           '#element_validate' => array('nodereference_url_fallback_validate'),
+          '#weight' => -2,
         );
 
         $form['node_link'] = array(
