@@ -342,7 +342,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
   }
   // Pull from the URL.
   else {
-    $reference_nid = nodereference_url_get_nid($field_name);
+    $referenced_nid = nodereference_url_get_nid($field_name);
   }
 
   // Check that the NID is a valid reference.
@@ -454,7 +454,7 @@ function nodereference_url_process_select($element, $form_state) {
 function nodereference_url_get_nid($field_name) {
   $add_urls = variable_get('nodereference_url_paths', array('node/add/%type/%nid'));
   $field_name_url = preg_replace('/^field_/', '', $field_name);
-  $reference_nid = NULL;
+  $referenced_nid = NULL;
 
   foreach ($add_urls as $url) {
     $args = explode('/', $url);
@@ -474,13 +474,13 @@ function nodereference_url_get_nid($field_name) {
       }
       // Arguments must line up exactly if they're not a wildcard.
       elseif (arg($part) != $arg) {
-        $reference_nid = FALSE;
+        $referenced_nid = FALSE;
         break;
       }
     }
   }
 
-  return $reference_nid;
+  return $referenced_nid;
 }
 
 /**
