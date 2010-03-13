@@ -137,9 +137,19 @@ function nodereference_url_build_link($node, $field, $teaser = FALSE) {
           $link['query'] = 'destination='. urlencode(drupal_get_path_alias('node/'. $node->nid));
         }
       }
-      if (module_exists('og') && $group_node = og_determine_context_get_group($node)) {
-        $link['query'] = isset($link['query']) ? $link['query'] . '&' : '';
-        $link['query'] .= 'gids[]=' . $group_node->nid;
+      if (module_exists('og')) {
+        // First try to get context based on the current page URL.
+        $group_node = og_get_group_context();
+
+        // Otherwise try getting the context based on the node being referenced.
+        if (!$group_node) {
+          $group_node = og_determine_context_get_group($node);
+        }
+
+        if ($group_node) {
+          $link['query'] = isset($link['query']) ? $link['query'] . '&' : '';
+          $link['query'] .= 'gids[]=' . $group_node->nid;
+        }
       }
     }
   }
