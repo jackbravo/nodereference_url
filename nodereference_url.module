@@ -357,7 +357,7 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
   if (empty($referenced_nid) || (!empty($field['widget']['edit_fallback']) && !empty($items))) {
     // If not on a node/add page (such as editing a node that does not yet have
     // a reference), switch to using an autocomplete widget.
-    if ($field['widget']['fallback'] == 'page_not_found' && nodereference_url_get_nid($field_name) === FALSE) {
+    if (in_array($field['widget']['fallback'], array('page_not_found', 'leave_blank')) && nodereference_url_get_nid($field_name) === FALSE) {
       $field['widget']['fallback'] = 'autocomplete';
     }
 
@@ -386,13 +386,9 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
         '#element_validate' => array('nodereference_url_autocomplete_validate'),
       );
     }
-    // Fallback to an empty field.
-    else {
-      $referenced_nid = '';
-    }
   }
 
-  if (isset($referenced_nid) && (empty($field['widget']['edit_fallback']))) {
+  if (isset($referenced_nid) && (empty($element['#type']))) {
     $element[0]['nid'] = array(
       '#title' => $field['widget']['label'],
       '#type' => 'nodereference_url',
