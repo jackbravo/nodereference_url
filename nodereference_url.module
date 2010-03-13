@@ -474,6 +474,10 @@ function nodereference_url_get_nid($field_name) {
         break;
       }
     }
+
+    if ($referenced_nid) {
+      break;
+    }
   }
 
   return $referenced_nid;

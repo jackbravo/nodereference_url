@@ -61,7 +61,7 @@ To do so, add additional paths to your settings.php with the following code:
 
 $conf['nodereference_url_paths'] = array(
   'node/add/%type/%nid',
-  'node/%/add/%type/%nid,
+  'node/%/add/%type/%nid',
 );
 
 Only two tokens are supported:
