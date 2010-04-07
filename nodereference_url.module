@@ -357,8 +357,8 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
 
   // Check that the NID is a valid reference.
   if (!empty($referenced_nid)) {
-    $valid_options = optionwidgets_options($field);
-    if (!isset($valid_options[$referenced_nid])) {
+    $reference = _nodereference_potential_references($field, '', 'equals', array($referenced_nid), 1);
+    if (empty($reference)) {
       $referenced_nid = NULL;
     }
   }
