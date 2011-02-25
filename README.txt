@@ -1,4 +1,3 @@
-// $Id$
 
 The Node Reference URL Widget module adds a new widget to the Node Reference
 CCK field type. It auto-populates a node reference field with a value from the
