@@ -1,6 +1,8 @@
 ; $Id$
 name = Node Reference URL Widget
-description = Adds an additional widget to the CCK Node Reference field that prepopulates a reference by the URL.
-dependencies[] = nodereference
-package = CCK
-core = 6.x
+description = Adds an additional widget to the Node Reference field that prepopulates a reference by the URL.
+dependencies[] = node_reference
+files[] = nodereference_url.module
+package = Fields
+core = 7.x
+

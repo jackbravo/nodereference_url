@@ -32,26 +32,34 @@ function nodereference_url_form_alter(&$form, &$form_state, $form_id) {
 /**
  * Implementation of hook_widget_info().
  */
-function nodereference_url_widget_info() {
+function nodereference_url_field_widget_info() {
   return array(
     'nodereference_url' => array(
       'label' => t('Reference from URL'),
-      'field types' => array('nodereference'),
-      'multiple values' => CONTENT_HANDLE_MODULE,
-      'callbacks' => array(
-        'default value' => CONTENT_CALLBACK_NONE,
+      'description' => t('Node Reference calculated from URL'),
+      'field types' => array('node_reference'),
+      'settings' => array(
+        'fallback' => NULL,
+        'node_link' => array(),
       ),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_DEFAULT,
+      ), 
     ),
   );
 }
 
 /**
- * Implementation of hook_link().
+ * Implementation of hook_node_view().
  */
-function nodereference_url_link($type, $object, $teaser = FALSE) {
-  if ($type == 'node') {
-    return nodereference_url_build_all_links($object, $teaser);
-  }
+function nodereference_url_node_view($node, $view_mode, $langcode) {
+  $links = nodereference_url_build_all_links($node, $view_mode);
+  $node->content['links']['nodereference_url'] = array(
+    '#theme' => 'links__node__nodereference',
+    '#links' => $links,
+    '#attributes' => array('class' => array('links', 'inline')),
+  );
 }
 
 /**
@@ -64,15 +72,17 @@ function nodereference_url_link($type, $object, $teaser = FALSE) {
  * @return
  *   An array of links for use with theme_links().
  */
-function nodereference_url_build_all_links($node, $teaser) {
+function nodereference_url_build_all_links($node, $view_mode) {
   $links = array();
-  $fields = content_fields();
-  foreach ($fields as $field_name => $field) {
-    foreach (_nodereference_url_field_instances($field_name) as $target_type => $instance) {
+  //check if the type is one of referenced fields.
+  $fields = field_info_instances('node');
+  foreach ($fields as $target_type => $field) {
+    foreach ($field as $field_name => $instance) {
       if ($instance['widget']['type'] == 'nodereference_url') {
-        $link_settings = $instance['widget']['node_link'];
-        if (($link_settings['teaser'] && $teaser == TRUE) || ($link_settings['full'] && $teaser == FALSE)) {
-          if ($link = nodereference_url_build_link($node, $instance, $teaser)) {
+        $link_settings = $instance['widget']['settings']['node_link'];
+        if (isset($link_settings[$view_mode])) {
+          $link = nodereference_url_build_link($node, $instance, $view_mode);
+          if ($link) {
             $links[$target_type .'_'. $field_name] = $link;
           }
         }
@@ -99,27 +109,26 @@ function nodereference_url_build_all_links($node, $teaser) {
  * @return
  *   An array containing properties to build a single link.
  */
-function nodereference_url_build_link($node, $field, $teaser = FALSE) {
+function nodereference_url_build_link($node, $field, $view_mode) {
   $link = array();
 
   // Check if this widget is using a views listing.
-  if (module_exists('views') && !empty($field['advanced_view']) && $field['advanced_view'] != '--') {
-    $referenceable = (bool) _nodereference_potential_references_views($field, '', NULL, array($node->nid), 1);
-  }
-  // Otherwise restrict by node type.
-  else {
-    $referenceable = !empty($field['referenceable_types'][$node->type]);
+  if (module_exists('views') && isset($field['advanced_view']) && !empty($field['advanced_view']) && $field['advanced_view'] != '--') {
+    $referenceable = (bool) _node_reference_potential_references($field, '', NULL, array($node->nid), 1);
+  } else {
+    $field_info = field_info_field($field['field_name']);
+    $referenceable = !empty($field_info['settings']['referenceable_types'][$node->type]);
   }
 
-  if ($referenceable && node_access('create', $field['type_name'])) {
-    $link_settings = $field['widget']['node_link'];
-    if ((!empty($link_settings['teaser']) && $teaser == TRUE) || (!empty($link_settings['full']) && $teaser == FALSE)) {
+  if ($referenceable && node_access('create', $field['bundle'])) {
+    $link_settings = $field['widget']['settings']['node_link'];
+    if ( !empty($link_settings[$view_mode]) ) {
       // Get the first "preferred" path for creating Node Reference links.
       $link_urls = variable_get('nodereference_url_paths', array('node/add/%type/%nid'));
 
       // Basic wildcard replacement: %type and %nid.
       $link_url = $link_urls[0];
-      $link_url = str_replace('%type', str_replace('_', '-', $field['type_name']), $link_url);
+      $link_url = str_replace('%type', str_replace('_', '-', $field['bundle']), $link_url);
       $link_url = str_replace('%nid', $node->nid, $link_url);
 
       $link = array(
@@ -134,7 +143,7 @@ function nodereference_url_build_link($node, $field, $teaser = FALSE) {
           $link['query'] = drupal_get_destination();
         }
         elseif ($link_settings['destination'] == 'node') {
-          $link['query'] = 'destination='. urlencode(drupal_get_path_alias('node/'. $node->nid));
+          $link['query'] = array ('destination' => drupal_get_path_alias('node/'. $node->nid));
         }
       }
       if (module_exists('og')) {
@@ -147,8 +156,7 @@ function nodereference_url_build_link($node, $field, $teaser = FALSE) {
         }
 
         if ($group_node) {
-          $link['query'] = isset($link['query']) ? $link['query'] . '&' : '';
-          $link['query'] .= 'gids[]=' . $group_node->nid;
+        $link['query']['gids'] = $group_node->nid;
         }
       }
     }
@@ -190,21 +198,7 @@ function nodereference_url_create_link($node, $field_name, $type_name, $attribut
 }
 
 /**
- * Helper function to retrieve all instances of a field.
- */
-function _nodereference_url_field_instances($field_name) {
-  $info = _content_type_info();
-  $instances = array();
-  foreach (node_get_types('names') as $node_type => $node_type_name) {
-    if (isset($info['content types'][$node_type]['fields'][$field_name])) {
-      $instances[$node_type] = $info['content types'][$node_type]['fields'][$field_name];
-    }
-  }
-  return $instances;
-}
-
-/**
- * Implementation of FAPI hook_elements().
+ * Implementation of hook_elements_info().
  *
  * Any FAPI callbacks needed for individual widgets can be declared here,
  * and the element will be passed to those callbacks for processing.
@@ -215,7 +209,7 @@ function _nodereference_url_field_instances($field_name) {
  * Autocomplete_path is not used by text_widget but other widgets can use it
  * (see nodereference and userreference).
  */
-function nodereference_url_elements() {
+function nodereference_url_element_info() {
   return array(
     'nodereference_url' => array(
       '#input' => TRUE,
@@ -227,88 +221,88 @@ function nodereference_url_elements() {
 }
 
 /**
- * Implementation of hook_widget_settings().
+ * Implementation of hook_field_widget_settings_form().
  */
-function nodereference_url_widget_settings($op, $widget) {
-  switch ($op) {
-    case 'form':
-      $form = array();
-      if ($widget['type'] == 'nodereference_url') {
-        $form['fallback'] = array(
+function nodereference_url_field_widget_settings_form($field, $instance) {
+  $widget   = $instance['widget'];
+  $defaults = field_info_widget_settings($widget['type']);
+  $settings = array_merge($defaults, $widget['settings']);
+
+  $form = array();
+  if ($widget['type'] == 'nodereference_url') {
+    $form['fallback'] = array(
           '#type' => 'radios',
           '#title' => t('Fallback behavior'),
           '#options' => array(
-            'autocomplete' => t('Use autocomplete widget'),
-            'select' => t('Use select list widget'),
             'page_not_found' => t('Display page not found error'),
+            'select' => t('Use select list widget'),
+            'autocomplete' => t('Use autocomplete widget'),
             'leave_blank' => t('Leave the field blank'),
-          ),
-          '#default_value' => isset($widget['fallback']) ? $widget['fallback'] : 'autocomplete',
+    ),
+          '#default_value' => isset($settings['fallback']) ? $settings['fallback'] : 'page_not_found',
           '#description' => t('If no content is referenced in the URL, determine how the form should be handled.'),
           '#required' => TRUE,
           '#element_validate' => array('nodereference_url_fallback_validate'),
-          '#weight' => -3,
-        );
-        $form['edit_fallback'] = array(
-          '#type' => 'checkbox',
-          '#title' => t('Use fallback behavior when editing content'),
-          '#default_value' => isset($widget['edit_fallback']) ? $widget['edit_fallback'] : FALSE,
-          '#weight' => -2,
-        );
+    );
 
-        $form['node_link'] = array(
+    $form['node_link'] = array(
           '#tree' => TRUE,
           '#type' => 'fieldset',
           '#title' => t('Referenceable node links'),
           '#element_validate' => array('nodereference_url_node_link_validate'),
           '#description' => t('These settings will automatically make a link on nodes that can be referenced. Clicking the link will take the user to the new node form and prepopulate the value of this node reference field.'),
-        );
-        $form['node_link']['teaser'] = array(
-          '#type' => 'checkbox',
-          '#title' => t('Create link on the teaser view'),
-          '#default_value' => isset($widget['node_link']['teaser']) ? $widget['node_link']['teaser'] : FALSE,
-        );
-        $form['node_link']['full'] = array(
-          '#type' => 'checkbox',
-          '#title' => t('Create link on the full view'),
-          '#default_value' => isset($widget['node_link']['full']) ? $widget['node_link']['full'] : TRUE,
-        );
-        $form['node_link']['title'] = array(
+    );
+    $form['node_link']['teaser'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Create link on the teaser view'),
+      '#default_value' => isset($settings['node_link']['teaser']) ? $settings['node_link']['teaser'] : FALSE,
+    );
+    $form['node_link']['full'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Create link on the full view'),
+      '#default_value' => isset($settings['node_link']['full']) ? $settings['node_link']['full'] : TRUE,
+    );
+    $form['node_link']['title'] = array(
           '#type' => 'textfield',
           '#title' => t('Link title'),
-          '#default_value' => isset($widget['node_link']['title']) ? $widget['node_link']['title'] : '',
+          '#default_value' => isset($settings['node_link']['title']) ? $settings['node_link']['title'] : '',
           '#description' => t('The title is the visible text for the link. This is required if you enable the content links.'),
-        );
-        $form['node_link']['hover_title'] = array(
+          '#required' => TRUE,
+    );
+    $form['node_link']['hover_title'] = array(
           '#type' => 'textfield',
           '#title' => t('Link hover title'),
-          '#default_value' => isset($widget['node_link']['hover_title']) ? $widget['node_link']['hover_title'] : '',
+          '#default_value' => isset($settings['node_link']['hover_title']) ? $settings['node_link']['hover_title'] : '',
           '#description' => t('Text shown while hovering over the link.'),
-        );
-        $form['node_link']['destination'] = array(
+    );
+    $form['node_link']['destination'] = array(
           '#type' => 'select',
           '#title' => t('Return path'),
-          '#default_value' => isset($widget['node_link']['destination']) ? $widget['node_link']['destination'] : 'default',
+          '#default_value' => isset($settings['node_link']['destination']) ? $settings['node_link']['destination'] : 'default',
           '#options' => array(
             'default' => t('The new node (no redirect)'),
             'node' => t('The referenced node'),
             'source' => t('The previous page'),
-          ),
+    ),
           '#description' => t('After creating the new node through the link, determine where the user should be redirected.'),
-        );
-      }
-      return $form;
+    );
+   }
+  return $form;
+}
 
-    case 'save':
-      return array('node_link', 'fallback', 'edit_fallback');
-  }
+
+/**
+ * Implementation of hook_field_widget_error().
+ */
+function nodereference_url_field_widget_error($element, $error, $form, &$form_state) {
+  form_error($element['nid'], $error['message']);
 }
 
 /**
  * Element validation function to ensure invalid options are not selected.
  */
 function nodereference_url_fallback_validate($element, &$form_state) {
-  if ($form_state['values']['required'] && $form_state['values']['fallback'] == 'leave_blank') {
+  if ($form_state['values']['instance']['required'] && $form_state['values']['instance']['widget']['settings']['fallback'] == 'leave_blank') {
     form_error($element, t('The fallback behavior cannot be left blank if this field is also required.'));
   }
 }
@@ -319,36 +313,43 @@ function nodereference_url_fallback_validate($element, &$form_state) {
  * This function doesn't actually validate, it just reformats form_state value
  * into an array of a suitable format for nodereference module
  */
-function nodereference_url_autocomplete_validate($element, &$form_state) {
+function nodereference_url_autocomplete_validate($element, &$form_state, $form) {
   form_set_value($element, array($form_state['values'][$element['#field_name']]), $form_state);
 }
 
 /**
  * Element validation function that makes title required when creating a link.
  */
-function nodereference_url_node_link_validate($element, &$form_state) {
-  $link_settings = $form_state['values']['node_link'];
+function nodereference_url_node_link_validate($element, &$form_state, $form) {
+  $link_settings = $form_state['values']['instance']['widget']['settings']['node_link'];
   if (($link_settings['teaser'] || $link_settings['full']) && empty($link_settings['title'])) {
     form_error($element['title'], t('A link title must be specified if creating links on referenceable content.'));
   }
 }
 
 /**
- * Implementation of hook_widget().
+ * Implementation of hook_field_widget_form().
  */
-function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta = 0) {
-  $element = array('#tree' => TRUE);
+function nodereference_url_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $fallback = $instance['widget']['settings']['fallback'];
   $field_name = $field['field_name'];
   $field_name_url = preg_replace('/^field_/', '', $field_name);
   $referenced_nid = NULL;
+  $referer = preg_replace('/^http(.*)node\/add/', 'node/add', $_SERVER['HTTP_REFERER']);
 
   // Check for an existing NID.
-  if (isset($items[0]['nid']) && is_numeric($items[0]['nid'])) {
-    $referenced_nid = $items[0]['nid'];
+  if (isset($items[$delta]['nid']) && is_numeric($items[$delta]['nid'])) {
+    $referenced_nid = $items[$delta]['nid'];
   }
   // Check for a reference in the query string.
-  elseif (isset($_GET[$field_name_url]) && is_numeric($_GET[$field_name_url])) {
-    $referenced_nid = $_GET[$field_name_url];
+  elseif (arg(0, $referer) == 'node') {
+	  if(!is_numeric(arg(3, $referer))){
+		  $referer_nid = preg_replace('/\?(.*)/', '', arg(3, $referer));
+		  if (is_numeric($referer_nid)){
+			  $referenced_nid = $referer_nid;
+		  }
+	  }
+      else {$referenced_nid = arg(3, $referer);}
   }
   // Pull from the URL.
   else {
@@ -357,57 +358,64 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
 
   // Check that the NID is a valid reference.
   if (!empty($referenced_nid)) {
-    $reference = _nodereference_potential_references($field, '', 'equals', array($referenced_nid), 1);
+    $reference = _node_reference_potential_references($field, '', 'equals', array($referenced_nid), 1);
     if (empty($reference)) {
       $referenced_nid = NULL;
+    } else {
+      $reference_title = $reference[$referenced_nid]['title'];
     }
   }
 
   // If no NID is available or editing this field, use the fallback behavior.
-  if (empty($referenced_nid) || (!empty($field['widget']['edit_fallback']) && !empty($items))) {
+  if (empty($referenced_nid) || (!empty($field['widget']['edit_fallback']) && !empty($items[$delta]['nid']))) {
+
     // If not on a node/add page (such as editing a node that does not yet have
     // a reference), switch to using an autocomplete widget.
-    if (in_array($field['widget']['fallback'], array('page_not_found', 'leave_blank')) && nodereference_url_get_nid($field_name) === FALSE) {
-      $field['widget']['fallback'] = 'autocomplete';
+    if (in_array($fallback, array('page_not_found', 'leave_blank')) && nodereference_url_get_nid($field_name) === FALSE) {
+      $fallback = 'autocomplete';
     }
 
     // Page not found error.
     // Check for the form_build_id to prevent throwing a page not found on
     // manual builds. See http://drupal.org/node/397606.
-    if ($field['widget']['fallback'] == 'page_not_found' && isset($form['form_build_id'])) {
-      drupal_set_message(t('To create a new @type, a referenced piece of content must be specified in the link you followed.', array('@type' => node_get_types('name', $field['type_name']))), 'error');
+    if ($fallback == 'page_not_found') {
+      drupal_set_message(t('To create a new @type, a referenced piece of content must be specified in the link you followed.', array('@type' => $field['bundles']['node'][0])), 'error');
       drupal_not_found();
       exit();
     }
     // Fallback to select list.
-    elseif ($field['widget']['fallback'] == 'select') {
-      $element = array(
-        '#type' => 'nodereference_select',
-        '#default_value' => $items,
-        '#after_build' => array('nodereference_url_process_select'),
+    elseif ($fallback == 'select' || $fallback == '') {
+      $element += array(
+        '#type' => 'select',
+        '#default_value' => isset($items[$delta]['nid']) ? $items[$delta]['nid'] : NULL,
+        '#options' => array('' => t('- None -')) + node_reference_options_list($field),
       );
     }
     // Fallback to autocomplete.
-    elseif ($field['widget']['fallback'] == 'autocomplete') {
-      $element = array(
-        '#type' => 'nodereference_autocomplete',
-        '#default_value' => isset($items[$delta]) ? $items[$delta] : NULL,
-        '#value_callback' => 'nodereference_autocomplete_value',
-        '#element_validate' => array('nodereference_url_autocomplete_validate'),
+    elseif ($fallback == 'autocomplete') {
+      $element += array(
+        '#type' => 'textfield',
+        '#default_value' => isset($items[$delta]['nid']) ? $items[$delta]['nid'] : NULL,
+        '#autocomplete_path' => 'node_reference/autocomplete/' . $instance['entity_type'] . '/' . $field['field_name'],
+        '#value_callback' => 'node_reference_autocomplete_value',
+        '#element_validate' => array('node_reference_autocomplete_validate'),
       );
     }
   }
 
   if (isset($referenced_nid) && (empty($element['#type']))) {
-    $element[0]['nid'] = array(
-      '#title' => $field['widget']['label'],
-      '#type' => 'nodereference_url',
-      '#field_name' => $field_name,
-      '#default_value' => $referenced_nid,
+    $element += array(
+      '#type' => 'value',
+      '#value' => $referenced_nid,
+    );
+    $element['referenced_title'] = array(
+      '#type' => 'item',
+      '#title' => $instance['label'],
+      '#markup' => '<span class="' . $field_name . '">' . $reference_title . '</span>',
     );
   }
 
-  return $element;
+  return array('nid' => $element);
 }
 
 /**
@@ -418,40 +426,20 @@ function nodereference_url_widget(&$form, &$form_state, $field, $items, $delta =
  *
  * The $fields array is in $form['#field_info'][$element['#field_name']].
  */
-function nodereference_url_process($element, $edit, $form_state, $form) {
-  $field_key = $element['#columns'][0];
-  $field = $form['#field_info'][$element['#field_name']];
-
-  if (isset($element['#value']) && is_numeric($element['#value'])) {
-    $element['#display_title'] = _nodereference_titles($element['#value']);
-  }
-  else {
-    $element['#display_title'] = t('Referenced content not found.');
-  }
-
-  $element['nid'] = array(
-    '#type' => 'value',
-    '#value' => isset($element['#value']) ? $element['#value'] : $element['#value'],
-    '#parents' => $element['#parents'],
-  );
-
-  return $element;
-}
-
-/**
- * An #after_build function used to add an empty value to the list of options.
- *
- * Normally CCK would do this in optionwidgets_options(), but since the widget
- * type "nodereference_url" isn't known by it, we have to add it manually.
- */
-function nodereference_url_process_select($element, $form_state) {
-  if (isset($element['nid']['nid']['#options'])) {
-    $field = content_fields($element['#field_name'], $element['#type_name']);
-    $field['widget']['type'] = 'optionwidgets_select';
-    $element['nid']['nid']['#options'] = array('' => theme('optionwidgets_none', $field)) + $element['nid']['nid']['#options'];
-  }
-
-  return $element;
+function nodereference_url_process($form, $type) {
+  if ($type == 'field') {
+    if ( isset($form['field_type']) && $form['field_type'] == 'node_reference') {
+      $field_key = $form['field_name'];
+      $element = $form['element'];
+      $field=$form['object']->$field_key;
+      if (isset($element['#items'][0]['nid']) && is_numeric($element['#items'][0]['nid'])) {
+        $element['#title'] = _node_reference_get_node_titles(array($element['#items'][0]['nid']));
+     } else {
+        $element['#title'] = t('Referenced content not found.');
+      }     
+    }
+   }
+  return $form;
 }
 
 /**
