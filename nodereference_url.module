@@ -147,15 +147,15 @@ function nodereference_url_build_link($node, $field, $view_mode) {
       }
       if (module_exists('og')) {
         // First try to get context based on the current page URL.
-        $group_node = og_get_group_context();
+        $group_entity = og_get_context_by_url();
 
         // Otherwise try getting the context based on the node being referenced.
-        if (!$group_node) {
-          $group_node = og_determine_context_get_group($node);
+        if (!$group_entity) {
+          $group_entity = og_context();
         }
 
-        if ($group_node) {
-        $link['query']['gids'] = $group_node->nid;
+        if ($group_entity) {
+        $link['query']['gids'] = $group_entity->gid;
         }
       }
     }
